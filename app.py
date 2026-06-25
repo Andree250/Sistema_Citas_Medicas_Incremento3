@@ -138,10 +138,28 @@ def agendar(especialidad):
         return redirect(url_for('home'))
     return render_template('agendar.html', especialidad=especialidad)
 
+# 🔐 INTERCEPTOR EXCLUSIVO PARA INTERCEPCIÓN GET (Muestra la pantalla roja para tu captura OWASP)
+@app.route('/confirmar_cita', methods=['GET'])
+def confirmar_cita_get():
+    # 🔐 PROTECCIÓN OWASP A01: CONTROL DE ACCESO ROTO (BLOQUEO GET)
+    if 'usuario_nombre' not in session:
+        return """
+        <div style="text-align:center; margin-top:50px; font-family:sans-serif; color:#d32f2f;">
+            <h1>❌ ERROR 403: ACCESO NO AUTORIZADO</h1>
+            <hr style="width:50%;">
+            <p>Debe iniciar sesión en el sistema para realizar esta acción.</p>
+            <br>
+            <a href="/" style="padding:10px 20px; background:#d32f2f; color:white; text-decoration:none; border-radius:5px;">Ir al Login</a>
+        </div>
+        """, 403
+    
+    # Si tiene sesión iniciada pero entra escribiendo la URL, lo mandamos al panel
+    return redirect(url_for('dashboard'))
+
+# PROCESADOR DE FORMULARIO (POST)
 @app.route('/confirmar_cita', methods=['POST'])
 def confirmar_cita():
-    # 🔐 PROTECCIÓN OWASP A01: CONTROL DE ACCESO ROTO
-    # Bloquea peticiones directas por POST de usuarios no autenticados en el servidor
+    # 🔐 PROTECCIÓN OWASP A01: CONTROL DE ACCESO ROTO (BLOQUEO POST)
     if 'usuario_nombre' not in session:
         return """
         <div style="text-align:center; margin-top:50px; font-family:sans-serif; color:#d32f2f;">
