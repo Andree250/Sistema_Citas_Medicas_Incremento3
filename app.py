@@ -45,8 +45,23 @@ def init_db():
         ''')
         conn.commit()
 
-# Se ejecuta al levantar el servidor web
+# Se ejecuta al levantar el servidor web para garantizar la existencia de la BD
 init_db()
+
+# --- SIMULADOR DE SERVICIOS EXTERNOS (PREPARADO PARA INCREMENTO 3) ---
+def enviar_correo_confirmacion(dni, especialidad, doctor, fecha, hora):
+    """
+    Simula la invocación de un servicio API externo (ej. SendGrid / Mailgun)
+    para el envío asíncrono de notificaciones por correo electrónico (Pregunta 20).
+    """
+    print("\n" + "="*50)
+    print("🚀 [SERVICIO EXTERNO] Invocando API de Mensajería...")
+    print(f"📧 Destinatario (Paciente DNI): {dni}")
+    print(f"📝 Detalle: Cita confirmada con el Dr. {doctor} ({especialidad})")
+    print(f"📅 Agenda: {fecha} a las {hora}")
+    print("✅ [API STATUS] Email enviado exitosamente (200 OK)")
+    print("="*50 + "\n")
+    return True
 
 # --- RUTAS DE NAVEGACIÓN ---
 @app.route('/')
@@ -134,6 +149,9 @@ def confirmar_cita():
             ''', (dni, especialidad, doctor, fecha, hora))
             conn.commit()
         
+        # 🚀 INVOCACIÓN ASÍNCRONA DEL SERVICIO EXTERNO DE EMAIL
+        enviar_correo_confirmacion(dni, especialidad, doctor, fecha, hora)
+        
         return f"""
         <div style="text-align:center; margin-top:50px; font-family:sans-serif; color:#00796b;">
             <h1>✅ ¡CITA REGISTRADA CON ÉXITO!</h1>
@@ -142,6 +160,7 @@ def confirmar_cita():
             <p><strong>Doctor:</strong> {doctor}</p>
             <p><strong>Fecha:</strong> {fecha}</p>
             <p><strong>Hora:</strong> {hora}</p>
+            <p style="color:#555; font-size:14px;">📧 *Se ha enviado un correo de confirmación electrónico al paciente (API externa ejecutada).*</p>
             <br>
             <a href="/dashboard" style="padding:10px 20px; background:#00796b; color:white; text-decoration:none; border-radius:5px;">Volver al Panel</a>
         </div>
@@ -149,7 +168,7 @@ def confirmar_cita():
     except Exception as e:
         return f"<h1>Ocurrió un error:</h1><p>{str(e)}</p><a href='/dashboard'>Regresar</a>"
 
-# --- 🔍 MÓDULO OPTIMIZADO Y SEGURO: BUSCAR Y FILTRAR CITAS  ---
+# --- 🔍 MÓDULO OPTIMIZADO Y SEGURO: BUSCAR Y FILTRAR CITAS ---
 
 @app.route('/buscar_citas', methods=['GET', 'POST'])
 def buscar_citas():
@@ -165,7 +184,7 @@ def buscar_citas():
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                # Modificado para buscar por la columna id de la tabla o rowid
+                # Modificado para buscar de forma segura por el parámetro del ID incremental
                 cursor.execute('''
                     SELECT id, especialidad, doctor, fecha, hora 
                     FROM citas 
@@ -206,4 +225,5 @@ if __name__ == '__main__':
     # Render asigna un puerto dinámico, si no encuentra uno usa el 8080
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
+
     
