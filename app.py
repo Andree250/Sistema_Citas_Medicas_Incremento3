@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session
 import sqlite3
 import os
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='app/templates')
 app.secret_key = 'sistema_tech_2026_key' 
 
 # --- CONFIGURACIÓN DE RUTAS DE BASE DE DATOS ---
