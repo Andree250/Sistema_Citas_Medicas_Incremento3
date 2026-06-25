@@ -5,90 +5,92 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - Sistema Tech</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <style>
-        :root { --primary-color: #00796b; }
-        body { background-color: #f4f7f6; font-family: 'Segoe UI', sans-serif; }
-        .navbar { background-color: var(--primary-color); box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .card-med { 
-            border: none; 
-            border-radius: 15px; 
-            transition: transform 0.3s, box-shadow 0.3s;
-            background: white;
-        }
-        .card-med:hover { 
-            transform: translateY(-5px); 
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1); 
-        }
-        .icon-box { font-size: 50px; margin-bottom: 15px; }
-        .link-button {
-            display: block;
-            width: 100%;
-            padding: 12px;
-            background-color: var(--primary-color);
-            color: white;
-            text-align: center;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: bold;
-            transition: 0.2s;
-        }
-        .link-button:hover {
-            background-color: #004d40;
-            color: white;
-        }
+        body { background-color: #f0f7f6; }
+        .navbar-custom { background-color: #00796b; color: white; }
+        .card-especialidad { border: none; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); transition: transform 0.2s; }
+        .card-especialidad:hover { transform: translateY(-5px); }
+        .btn-agendar { background-color: #00796b; color: white; border-radius: 8px; font-weight: bold; }
+        .btn-agendar:hover { background-color: #004d40; color: white; }
+        .btn-buscar-custom { background-color: #00796b; color: white; border: none; border-radius: 10px; padding: 12px 24px; font-weight: bold; transition: background-color 0.2s; }
+        .btn-buscar-custom:hover { background-color: #004d40; color: white; }
     </style>
 </head>
 <body>
 
-    <nav class="navbar navbar-dark p-3 mb-5">
-        <div class="container d-flex justify-content-between align-items-center">
-            <span class="navbar-brand fw-bold">SISTEMA TECH</span>
-            <div>
+    <nav class="navbar navbar-expand-lg navbar-custom shadow-sm py-3">
+        <div class="container">
+            <span class="navbar-brand mb-0 h1 text-white text-uppercase" style="letter-spacing: 1px;">SISTEMA TECH</span>
+            <div class="d-flex align-items-center ms-auto">
                 <span class="text-white me-3">Bienvenido, <strong>{{ nombre }}</strong></span>
-                <a href="/logout" class="btn btn-sm btn-outline-light">Cerrar Sesión</a>
+                <a href="/logout" class="btn btn-outline-light btn-sm px-3" style="border-radius: 5px;">Cerrar Sesión</a>
             </div>
         </div>
     </nav>
 
-    <div class="container">
+    <div class="container my-5">
+        
+        <div class="text-center mb-4">
+            <h2 class="fw-bold" style="color: #333;">Panel de Citas Médicas</h2>
+            <p class="text-muted">Seleccione la especialidad para continuar con su reserva o consulte sus registros.</p>
+        </div>
+
         <div class="text-center mb-5">
-            <h2 class="fw-bold">Panel de Citas Médicas</h2>
-            <p class="text-muted">Seleccione la especialidad para continuar con su reserva.</p>
+            <a href="/buscar_citas" class="btn btn-buscar-custom btn-lg shadow-sm">
+                🔍 Ver y Filtrar Citas Programadas
+            </a>
         </div>
 
         <div class="row g-4 justify-content-center">
-            <div class="col-12 col-md-4">
-                <div class="card card-med p-4 text-center">
-                    <div class="icon-box">🦷</div>
-                    <h4>Odontología</h4>
+            
+            <div class="col-md-4">
+                <div class="card card-especialidad h-100 p-4 text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-shield-plus" style="font-size: 3rem; color: #00796b;"></i>
+                    </div>
+                    <h4 class="card-title fw-bold">Odontología</h4>
                     <p class="text-muted small">Dra. Claudia Ramos</p>
-                    <a href="/agendar/Odontologia" class="link-button">Agendar Cita</a>
+                    <div class="mt-auto">
+                        <a href="/agendar/Odontología" class="btn btn-agendar w-100 py-2">Agendar Cita</a>
+                    </div>
                 </div>
             </div>
 
-            <div class="col-12 col-md-4">
-                <div class="card card-med p-4 text-center">
-                    <div class="icon-box">👶</div>
-                    <h4>Pediatría</h4>
+            <div class="col-md-4">
+                <div class="card card-especialidad h-100 p-4 text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-egg-fried" style="font-size: 3rem; color: #00796b;"></i>
+                    </div>
+                    <h4 class="card-title fw-bold">Pediatría</h4>
                     <p class="text-muted small">Dr. Marco Espinoza</p>
-                    <a href="/agendar/Pediatria" class="link-button">Agendar Cita</a>
+                    <div class="mt-auto">
+                        <a href="/agendar/Pediatría" class="btn btn-agendar w-100 py-2">Agendar Cita</a>
+                    </div>
                 </div>
             </div>
 
-            <div class="col-12 col-md-4">
-                <div class="card card-med p-4 text-center">
-                    <div class="icon-box">🩺</div>
-                    <h4>Medicina General</h4>
+            <div class="col-md-4">
+                <div class="card card-especialidad h-100 p-4 text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-heart-pulse" style="font-size: 3rem; color: #00796b;"></i>
+                    </div>
+                    <h4 class="card-title fw-bold">Medicina General</h4>
                     <p class="text-muted small">Dra. Jessie Aquino</p>
-                    <a href="/agendar/Medicina General" class="link-button">Agendar Cita</a>
+                    <div class="mt-auto">
+                        <a href="/agendar/Medicina General" class="btn btn-agendar w-100 py-2">Agendar Cita</a>
+                    </div>
                 </div>
             </div>
+
         </div>
+
+        <footer class="text-center mt-5 pt-4 text-muted border-top small">
+            <p>&copy; 2026 Sistema Tech - Ingeniería de Sistemas</p>
+        </footer>
+
     </div>
 
-    <footer class="text-center mt-5 py-4 text-muted">
-        <small>&copy; 2026 Sistema Tech - Ingeniería de Sistemas</small>
-    </footer>
-
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

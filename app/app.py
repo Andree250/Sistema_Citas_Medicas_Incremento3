@@ -7,7 +7,7 @@ app.secret_key = 'sistema_tech_2026_key'
 
 # --- CONFIGURACIÓN DE RUTAS DE BASE DE DATOS ---
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-DB_PATH = os.path.join(BASE_DIR, '..', 'database', 'sistema_tech.db')
+DB_PATH = os.path.abspath(os.path.join(BASE_DIR, '..', 'database', 'sistema_tech.db'))
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH, timeout=20)
@@ -34,41 +34,50 @@ def dashboard():
 
 @app.route('/crear_usuario', methods=['POST'])
 def crear_usuario():
-    dni = request.form['dni']
-    nombre = request.form['nombre']
-    correo = request.form['correo']
-    password = request.form['password']
-    
+    dni = request.form.get('dni')
+    nombre = request.form.get('nombre')
+    contrasena = request.form.get('password')  
+
+    if not dni or not nombre or not contrasena:
+        return render_template('index.html', error="Todos los campos son obligatorios.")
+
     try:
         with get_db_connection() as conn:
-            conn.execute('''
-                INSERT INTO usuarios (dni, nombre, correo, password) 
-                VALUES (?, ?, ?, ?)
-            ''', (dni, nombre, correo, password))
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO usuarios (dni, nombre, password) VALUES (?, ?, ?)', 
+                           (dni, nombre, contrasena))
             conn.commit()
-        return redirect(url_for('home'))
+        
+        return render_template('index.html', exito="Usuario registrado correctamente. Ya puedes iniciar sesión.")
+        
     except sqlite3.IntegrityError:
-        return "<h1>Error: El DNI ya existe</h1><a href='/registro'>Regresar</a>"
+        return render_template('index.html', error="El DNI ingresado ya se encuentra registrado.")
+
+@app.route('/login_usuario', methods=['POST'])
+def login_usuario():
+    dni = request.form.get('dni')
+    contrasena = request.form.get('contrasena')
+
+    if not dni or not contrasena:
+        return render_template('login.html', error="Todos los campos son obligatorios.")
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT nombre FROM usuarios WHERE dni = ? AND password = ?', (dni, contrasena))
+            usuario = cursor.fetchone()
+        
+        if usuario:
+            session['usuario_nombre'] = usuario['nombre']
+            return redirect(url_for('dashboard'))
+        else:
+            return render_template('login.html', error="Usuario o contraseña incorrectos.")
+            
     except Exception as e:
-        return f"<h1>Error al registrar: {e}</h1><a href='/registro'>Regresar</a>"
+        print(f"Error en Login: {str(e)}")
+        return render_template('login.html', error="Ocurrió un error en el servidor.")
 
-@app.route('/login', methods=['POST'])
-def login():
-    dni = request.form['dni']
-    password = request.form['password']
-    
-    with get_db_connection() as conn:
-        user = conn.execute('SELECT * FROM usuarios WHERE dni = ? AND password = ?',
-                            (dni, password)).fetchone()
-    
-    if user:
-        session['usuario_nombre'] = user['nombre']
-        session['usuario_dni'] = user['dni']
-        return redirect(url_for('dashboard'))
-    else:
-        return "<h1>DNI o Contraseña incorrectos</h1><a href='/'>Intentar de nuevo</a>"
-
-# --- LÓGICA DE CITAS MÉDICAS (ARREGLADA) ---
+# --- LÓGICA DE CITAS MÉDICAS ---
 
 @app.route('/agendar/<especialidad>')
 def agendar(especialidad):
@@ -78,18 +87,13 @@ def agendar(especialidad):
 
 @app.route('/confirmar_cita', methods=['POST'])
 def confirmar_cita():
-    # TEST RÁPIDO: Si el servidor recibe algo, lo primero que hará es imprimir esto
-    print("--- RECIBIENDO DATOS DE CITA ---")
-    
     try:
-        # Extraemos los datos del formulario
         dni = request.form.get('dni')
         especialidad = request.form.get('especialidad')
         doctor = request.form.get('doctor')
         fecha = request.form.get('fecha')
         hora = request.form.get('hora')
         
-        # Guardamos en la base de datos[cite: 1, 3]
         with get_db_connection() as conn:
             conn.execute('''
                 INSERT INTO citas (dni_paciente, especialidad, doctor, fecha, hora) 
@@ -97,8 +101,6 @@ def confirmar_cita():
             ''', (dni, especialidad, doctor, fecha, hora))
             conn.commit()
         
-        # RESPUESTA DIRECTA: No usamos render_template por ahora, 
-        # enviamos el HTML directamente para asegurar que lo veas.
         return f"""
         <div style="text-align:center; margin-top:50px; font-family:sans-serif; color:#00796b;">
             <h1>✅ ¡CITA REGISTRADA CON ÉXITO!</h1>
@@ -111,14 +113,63 @@ def confirmar_cita():
             <a href="/dashboard" style="padding:10px 20px; background:#00796b; color:white; text-decoration:none; border-radius:5px;">Volver al Panel</a>
         </div>
         """
-            
     except Exception as e:
         return f"<h1>Ocurrió un error:</h1><p>{str(e)}</p><a href='/dashboard'>Regresar</a>"
+
+# --- 🔍 MÓDULO OPTIMIZADO Y SEGURO: BUSCAR Y FILTRAR CITAS  ---
+
+@app.route('/buscar_citas', methods=['GET', 'POST'])
+def buscar_citas():
+    if 'usuario_nombre' not in session:
+        return redirect(url_for('home'))
+        
+    citas_filtradas = []
+    dni_buscado = ""
+    
+    if request.method == 'POST':
+        dni_buscado = request.form.get('dni')
+        
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                # El sistema valida de forma segura por el parámetro ingresado
+                cursor.execute('''
+                    SELECT rowid, especialidad, doctor, fecha, hora 
+                    FROM citas 
+                    WHERE dni_paciente = ?
+                ''', (dni_buscado,))
+                citas_filtradas = cursor.fetchall()
+        except Exception as e:
+            print(f"Error en la búsqueda: {str(e)}")
+
+    return render_template('buscar.html', citas=citas_filtradas, dni=dni_buscado)
+
+# --- ❌ MÓDULO SEGURO: CANCELAR CITA (CU-04) ---
+
+@app.route('/cancelar_cita/<int:id_cita>', methods=['POST'])
+def cancelar_cita(id_cita):
+    if 'usuario_nombre' not in session:
+        return redirect(url_for('home'))
+        
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            # 🔐 OWASP A01 Control de Acceso: Eliminación controlada por rowid único
+            cursor.execute('DELETE FROM citas WHERE rowid = ?', (id_cita,))
+            conn.commit()
+    except Exception as e:
+        print(f"Error al cancelar cita: {str(e)}")
+        
+    return redirect(url_for('buscar_citas'))
+
+# --- CIERRE DE SESIÓN ---
 
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('home'))
 
-if __name__ == '__main__':
-    app.run(debug=True, port=8080)
+if name == 'main':
+# Render asigna un puerto dinámico, si no encuentra uno usa el 8080
+port = int(os.environ.get("PORT", 8080))
+app.run(host='0.0.0.0', port=port)

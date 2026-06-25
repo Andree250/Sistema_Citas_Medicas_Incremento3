@@ -14,7 +14,19 @@
 <body>
     <div class="container py-5">
         <div class="row justify-content-center">
-            <div class="col-11 col-md-6 col-lg-4">
+            <div class="col-md-6 col-lg-5">
+                
+                {% if error %}
+                    <div class="alert alert-danger text-center mb-3" role="alert">
+                        ⚠️ {{ error }}
+                    </div>
+                {% endif %}
+                {% if exito %}
+                    <div class="alert alert-success text-center mb-3" role="alert">
+                        ✅ {{ exito }}
+                    </div>
+                {% endif %}
+
                 <div class="card card-registro p-4">
                     <h3 class="text-center mb-4" style="color: #00796b;">Crear Cuenta</h3>
                     <form action="/crear_usuario" method="POST">
