@@ -8,8 +8,11 @@ app.secret_key = 'sistema_tech_2026_key'
 # --- CONFIGURACIÓN DE RUTAS DE BASE DE DATOS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Render busca la base de datos dentro de app/database/ de manera segura
-DB_PATH = os.path.join(BASE_DIR, 'app', 'database', 'sistema_tech.db')
+# Forzamos la creación de la estructura de directorios en el servidor de Render
+DATABASE_DIR = os.path.join(BASE_DIR, 'app', 'database')
+os.makedirs(DATABASE_DIR, exist_ok=True)
+
+DB_PATH = os.path.join(DATABASE_DIR, 'sistema_tech.db')
 DATABASE = DB_PATH
 
 def get_db_connection():
@@ -19,9 +22,6 @@ def get_db_connection():
 
 # 🛠️ FUNCIÓN AUTOMÁTICA PARA INICIALIZAR LAS TABLAS EN RENDER
 def init_db():
-    # Asegura que exista el directorio de la base de datos
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    
     with get_db_connection() as conn:
         cursor = conn.cursor()
         # Crear tabla de usuarios si no existe
@@ -74,6 +74,7 @@ def registro():
 
 @app.route('/dashboard')
 def dashboard():
+    # 🔐 PROTECCIÓN OWASP A01: CONTROL DE ACCESO ROTO
     if 'usuario_nombre' not in session:
         return redirect(url_for('home'))
     return render_template('dashboard.html', nombre=session['usuario_nombre'])
@@ -100,6 +101,9 @@ def crear_usuario():
         
     except sqlite3.IntegrityError:
         return render_template('index.html', error="El DNI ingresado ya se encuentra registrado.")
+    except Exception as e:
+        print(f"Error en Registro: {str(e)}")
+        return render_template('index.html', error="Error al acceder a la base de datos.")
 
 @app.route('/login_usuario', methods=['POST'])
 def login_usuario():
@@ -129,6 +133,7 @@ def login_usuario():
 
 @app.route('/agendar/<especialidad>')
 def agendar(especialidad):
+    # 🔐 PROTECCIÓN OWASP A01: CONTROL DE ACCESO ROTO
     if 'usuario_nombre' not in session:
         return redirect(url_for('home'))
     return render_template('agendar.html', especialidad=especialidad)
@@ -185,6 +190,7 @@ def confirmar_cita():
 
 @app.route('/buscar_citas', methods=['GET', 'POST'])
 def buscar_citas():
+    # 🔐 PROTECCIÓN OWASP A01: CONTROL DE ACCESO ROTO
     if 'usuario_nombre' not in session:
         return redirect(url_for('home'))
         
@@ -197,7 +203,6 @@ def buscar_citas():
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                # Modificado para buscar de forma segura por el parámetro del ID incremental
                 cursor.execute('''
                     SELECT id, especialidad, doctor, fecha, hora 
                     FROM citas 
@@ -213,13 +218,13 @@ def buscar_citas():
 
 @app.route('/cancelar_cita/<int:id_cita>', methods=['POST'])
 def cancelar_cita(id_cita):
+    # 🔐 PROTECCIÓN OWASP A01: CONTROL DE ACCESO ROTO
     if 'usuario_nombre' not in session:
         return redirect(url_for('home'))
         
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            # 🔐 OWASP A01 Control de Acceso: Eliminación controlada por id único
             cursor.execute('DELETE FROM citas WHERE id = ?', (id_cita,))
             conn.commit()
     except Exception as e:
@@ -235,7 +240,6 @@ def logout():
     return redirect(url_for('home'))
 
 if __name__ == '__main__':
-    # Render asigna un puerto dinámico, si no encuentra uno usa el 8080
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
