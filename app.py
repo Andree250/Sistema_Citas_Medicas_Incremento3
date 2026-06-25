@@ -7,6 +7,8 @@ app.secret_key = 'sistema_tech_2026_key'
 
 # --- CONFIGURACIÓN DE RUTAS DE BASE DE DATOS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Render busca la base de datos dentro de app/database/ de manera segura
 DB_PATH = os.path.join(BASE_DIR, 'app', 'database', 'sistema_tech.db')
 DATABASE = DB_PATH
 
@@ -14,6 +16,37 @@ def get_db_connection():
     conn = sqlite3.connect(DB_PATH, timeout=20)
     conn.row_factory = sqlite3.Row
     return conn
+
+# 🛠️ FUNCIÓN AUTOMÁTICA PARA INICIALIZAR LAS TABLAS EN RENDER
+def init_db():
+    # Asegura que exista el directorio de la base de datos
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        # Crear tabla de usuarios si no existe
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS usuarios (
+                dni TEXT PRIMARY KEY,
+                nombre TEXT NOT NULL,
+                password TEXT NOT NULL
+            )
+        ''')
+        # Crear tabla de citas si no existe
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS citas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                dni_paciente TEXT NOT NULL,
+                especialidad TEXT NOT NULL,
+                doctor TEXT NOT NULL,
+                fecha TEXT NOT NULL,
+                hora TEXT NOT NULL
+            )
+        ''')
+        conn.commit()
+
+# Se ejecuta al levantar el servidor web
+init_db()
 
 # --- RUTAS DE NAVEGACIÓN ---
 @app.route('/')
@@ -132,9 +165,9 @@ def buscar_citas():
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                # El sistema valida de forma segura por el parámetro ingresado
+                # Modificado para buscar por la columna id de la tabla o rowid
                 cursor.execute('''
-                    SELECT rowid, especialidad, doctor, fecha, hora 
+                    SELECT id, especialidad, doctor, fecha, hora 
                     FROM citas 
                     WHERE dni_paciente = ?
                 ''', (dni_buscado,))
@@ -154,8 +187,8 @@ def cancelar_cita(id_cita):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            # 🔐 OWASP A01 Control de Acceso: Eliminación controlada por rowid único
-            cursor.execute('DELETE FROM citas WHERE rowid = ?', (id_cita,))
+            # 🔐 OWASP A01 Control de Acceso: Eliminación controlada por id único
+            cursor.execute('DELETE FROM citas WHERE id = ?', (id_cita,))
             conn.commit()
     except Exception as e:
         print(f"Error al cancelar cita: {str(e)}")
