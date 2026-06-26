@@ -5,17 +5,16 @@ def inicializar_db():
     dir_actual = os.path.dirname(__file__)
     ruta_db = os.path.join(dir_actual, "sistema_tech.db")
     
-    # Nos aseguramos de cerrar cualquier conexión previa
     conexion = sqlite3.connect(ruta_db)
     cursor = conexion.cursor()
 
-    # Limpiamos tablas antiguas para evitar errores de estructura
+    # Limpiamos tablas para reestructurar correctamente sin conflictos de columnas
     cursor.execute('DROP TABLE IF EXISTS transaccion')
     cursor.execute('DROP TABLE IF EXISTS pago')
     cursor.execute('DROP TABLE IF EXISTS citas')
     cursor.execute('DROP TABLE IF EXISTS usuarios')
 
-    # Tabla de Usuarios
+    # 1. Tabla de Usuarios (Capa de autenticación)
     cursor.execute('''
         CREATE TABLE usuarios (
             dni TEXT PRIMARY KEY,
@@ -25,7 +24,7 @@ def inicializar_db():
         )
     ''')
 
-    # Tabla de Citas (CON COLUMNA ESTADO ADICIONAL PARA PAGOS)
+    # 2. Tabla de Citas (Incluye columna de estado para el control de pagos)
     cursor.execute('''
         CREATE TABLE citas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,13 +38,9 @@ def inicializar_db():
         )
     ''')
     
-    # ==========================================
-    # FLUJO 3: ESTRUCTURAS DE GESTIÓN DE PAGOS
-    # ==========================================
-    
-    # Tabla PAGO
+    # 3. Tabla de Pagos (Estructura requerida Flujo 3)
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS pago (
+        CREATE TABLE pago (
             id_pago INTEGER PRIMARY KEY AUTOINCREMENT,
             id_cita INTEGER NOT NULL,
             monto REAL NOT NULL,
@@ -54,9 +49,9 @@ def inicializar_db():
         )
     ''')
     
-    # Tabla TRANSACCION
+    # 4. Tabla de Transacciones (Estructura requerida Flujo 3)
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS transaccion (
+        CREATE TABLE transaccion (
             id_transaccion INTEGER PRIMARY KEY AUTOINCREMENT,
             id_pago INTEGER NOT NULL,
             metodo TEXT NOT NULL, -- Tarjeta / Yape / Plin
@@ -65,9 +60,18 @@ def inicializar_db():
         )
     ''')
     
+    # INSERTAR PACIENTE DE PRUEBA POR DEFECTO PARA LOGUEARSE DE INMEDIATO
+    try:
+        cursor.execute("""
+            INSERT INTO usuarios (dni, nombre, correo, password) 
+            VALUES ('12345678', 'César César', 'cesar@mail.com', '123456')
+        """)
+    except sqlite3.IntegrityError:
+        pass
+    
     conexion.commit()
     conexion.close()
-    print("Base de datos SQLite reseteada y lista con estructuras de Pago (Flujo 3).")
+    print("Base de datos reseteada e inicializada correctamente con usuario de prueba.")
 
 # ==========================================
 # FUNCIONES LÓGICAS DEL FLUJO 3 (BACKEND)
@@ -92,11 +96,11 @@ def registrar_pago_completo(id_cita, monto, metodo):
     conexion = sqlite3.connect(ruta_db)
     cursor = conexion.cursor()
     
-    # 1. Insertar en tabla pago
+    # Insertar en tabla pago
     cursor.execute("INSERT INTO pago (id_cita, monto, estado) VALUES (?, ?, 'PAGADO')", (id_cita, monto))
     id_pago = cursor.lastrowid
     
-    # 2. Insertar en tabla transaccion
+    # Insertar en tabla transaccion
     import datetime
     fecha_actual = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute("INSERT INTO transaccion (id_pago, metodo, fecha_transaccion) VALUES (?, ?, ?)", (id_pago, metodo, fecha_actual))
@@ -104,10 +108,9 @@ def registrar_pago_completo(id_cita, monto, metodo):
     conexion.commit()
     conexion.close()
     
-    # 3. Cambiar estado en tabla citas utilizando el SP correspondiente
+    # Actualizar estado de la cita
     SP_M_Cita_Estado(id_cita, 'PAGADO')
 
 if __name__ == '__main__':
     inicializar_db()
-
     

@@ -2,10 +2,9 @@ import os
 from flask import Flask, render_template, request, redirect, url_for, session
 import sqlite3
 
-# Configuración de rutas absolutas para Render (Linux)
+# Configuración dinámica y absoluta de rutas para entorno Linux (Render)
 DIR_ACTUAL = os.path.dirname(os.path.abspath(__file__))
 RUTA_TEMPLATES = os.path.join(DIR_ACTUAL, "app", "templates")
-# Se define correctamente la ruta de la base de datos
 RUTA_DB = os.path.join(DIR_ACTUAL, "database", "sistema_tech.db")
 
 app = Flask(__name__, template_folder=RUTA_TEMPLATES)
@@ -15,7 +14,7 @@ def obtener_conexion_db():
     return sqlite3.connect(RUTA_DB)
 
 # ==========================================
-# RUTAS DE AUTENTICACIÓN Y NAVEGACIÓN
+# RUTAS DE AUTENTICACIÓN Y REGISTRO (MÚLTIPLES ALIAS)
 # ==========================================
 
 @app.route('/')
@@ -24,8 +23,10 @@ def index():
     return render_template('index.html')
 
 @app.route('/crear_usuario', methods=['GET', 'POST'])
+@app.route('/crear_usuario.html', methods=['GET', 'POST'])
+@app.route('/registro', methods=['GET', 'POST'])
 def crear_usuario():
-    """Flujo de Registro de Cuenta Nueva (login.html o formulario de registro)"""
+    """Controlador para el registro de nuevos pacientes"""
     if request.method == 'POST':
         dni = request.form.get('dni')
         nombre = request.form.get('nombre')
@@ -43,11 +44,12 @@ def crear_usuario():
             conexion.close()
             return redirect(url_for('login'))
         except Exception as e:
-            return f"Error al registrar usuario: {str(e)}", 400
+            return f"Error en el registro de la cuenta: {str(e)}", 400
             
-    return render_template('login.html') # Asumiendo que tu login maneja ambas vistas o cámbialo por tu html de registro
+    return render_template('login.html')
 
 @app.route('/login', methods=['GET', 'POST'])
+@app.route('/login.html', methods=['GET', 'POST'])
 def login():
     """Pantalla de Inicio de Sesión / Acceso (login.html)"""
     if request.method == 'POST':
@@ -65,13 +67,14 @@ def login():
             session['usuario_nombre'] = usuario[1]
             return redirect(url_for('dashboard'))
         else:
-            return render_template('login.html', error="Credenciales incorrectas. Intente nuevamente.")
+            return render_template('login.html', error="Credenciales incorrectas. Intente de nuevo.")
             
     return render_template('login.html')
 
 @app.route('/dashboard')
+@app.route('/dashboard.html')
 def dashboard():
-    """Panel de Control / Dashboard del Paciente (dashboard.html)"""
+    """Panel de Control del Paciente Autenticado"""
     if 'usuario_dni' not in session:
         return redirect(url_for('login'))
         
@@ -84,10 +87,11 @@ def dashboard():
     return render_template('dashboard.html', nombre=session['usuario_nombre'], citas=citas_paciente)
 
 # ==========================================
-# FLUJO 2: AGENDAMIENTO DE CITAS
+# FLUJO 2: AGENDAMIENTO DE CITAS Médicas
 # ==========================================
 
 @app.route('/agendar', methods=['GET', 'POST'])
+@app.route('/agendar.html', methods=['GET', 'POST'])
 def agendar_cita():
     """Pantalla de Agendamiento - Filtros y Selección (agendar.html)"""
     if 'usuario_dni' not in session:
@@ -115,7 +119,7 @@ def agendar_cita():
     return render_template('agendar.html')
 
 # ==========================================
-# FLUJO 3: CONTROLADOR Y PASARELA DE PAGOS
+# FLUJO 3: PASARELA Y PROCESAMIENTO DE PAGOS
 # ==========================================
 
 @app.route('/pago/<int:id_cita>')
@@ -131,22 +135,22 @@ def pantalla_pago(id_cita):
     conexion.close()
     
     if not cita:
-        return "Error: Cita no encontrada", 404
+        return "Error: Cita no encontrada.", 404
         
     return render_template('buscar.html', cita=cita, monto=50.0)
 
 @app.route('/procesar_pago', methods=['POST'])
 def C_Pago():
-    """Controlador C_Pago: Procesa la transacción y actualiza los estados"""
+    """Controlador central C_Pago: Registra la transacción física y lógica"""
     if 'usuario_dni' not in session:
         return redirect(url_for('login'))
         
     id_cita = request.form.get('id_cita')
-    metodo_pago = request.form.get('metodo_pago')
+    metodo_pago = request.form.get('metodo_pago') # Tarjeta / Yape / Plin
     monto_fijo = 50.0
     
     if not id_cita or not metodo_pago:
-        return "Error: Parámetros de transacción incompletos.", 400
+        return "Error: Datos de transacción incompletos.", 400
         
     from database.db_config import registrar_pago_completo
     
@@ -156,7 +160,7 @@ def C_Pago():
         return render_template('exito.html', id_cita=id_cita, pdf=nombre_comprobante, metodo=metodo_pago)
         
     except Exception as e:
-        return f"Error crítico en el procesamiento de la transacción: {str(e)}", 500
+        return f"Error interno en la pasarela de pagos: {str(e)}", 500
 
 @app.route('/logout')
 def logout():
