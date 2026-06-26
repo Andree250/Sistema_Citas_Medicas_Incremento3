@@ -2,12 +2,12 @@ import os
 from flask import Flask, render_template, request, redirect, url_for, session
 import sqlite3
 
-app = Flask(__name__)
-app.secret_key = 'clave_secreta_sistema_tech'
-
-# Configuración de la ruta de la base de datos
+# Modifica la inicialización original por esta:
 DIR_ACTUAL = os.path.dirname(os.path.abspath(__file__))
-RUTA_DB = os.path.join(DIR_ACTUAL, "database", "sistema_tech.db")
+RUTA_TEMPLATES = os.path.join(DIR_ACTUAL, "app", "templates")
+
+app = Flask(__name__, template_folder=RUTA_TEMPLATES)
+app.secret_key = 'clave_secreta_sistema_tech'
 
 def obtener_conexion_db():
     return sqlite3.connect(RUTA_DB)
@@ -149,4 +149,3 @@ if __name__ == '__main__':
     # Inicialización en modo seguro para despliegue local o Render
     app.run(debug=True, port=int(os.environ.get("PORT", 5000)))
 
-    
