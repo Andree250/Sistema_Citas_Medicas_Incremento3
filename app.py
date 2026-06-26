@@ -2,9 +2,11 @@ import os
 from flask import Flask, render_template, request, redirect, url_for, session
 import sqlite3
 
-# Modifica la inicialización original por esta:
+# Configuración de rutas absolutas para Render (Linux)
 DIR_ACTUAL = os.path.dirname(os.path.abspath(__file__))
 RUTA_TEMPLATES = os.path.join(DIR_ACTUAL, "app", "templates")
+# Se define correctamente la ruta de la base de datos
+RUTA_DB = os.path.join(DIR_ACTUAL, "database", "sistema_tech.db")
 
 app = Flask(__name__, template_folder=RUTA_TEMPLATES)
 app.secret_key = 'clave_secreta_sistema_tech'
@@ -20,6 +22,30 @@ def obtener_conexion_db():
 def index():
     """Landing Page / Pantalla de Inicio (index.html)"""
     return render_template('index.html')
+
+@app.route('/crear_usuario', methods=['GET', 'POST'])
+def crear_usuario():
+    """Flujo de Registro de Cuenta Nueva (login.html o formulario de registro)"""
+    if request.method == 'POST':
+        dni = request.form.get('dni')
+        nombre = request.form.get('nombre')
+        correo = request.form.get('correo')
+        password = request.form.get('password')
+        
+        try:
+            conexion = obtener_conexion_db()
+            cursor = conexion.cursor()
+            cursor.execute(
+                "INSERT INTO usuarios (dni, nombre, correo, password) VALUES (?, ?, ?, ?)",
+                (dni, nombre, correo, password)
+            )
+            conexion.commit()
+            conexion.close()
+            return redirect(url_for('login'))
+        except Exception as e:
+            return f"Error al registrar usuario: {str(e)}", 400
+            
+    return render_template('login.html') # Asumiendo que tu login maneja ambas vistas o cámbialo por tu html de registro
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -51,7 +77,6 @@ def dashboard():
         
     conexion = obtener_conexion_db()
     cursor = conexion.cursor()
-    # Listar las citas del paciente incluyendo su estado de pago
     cursor.execute("SELECT id, especialidad, doctor, fecha, hora, estado FROM citas WHERE dni_paciente = ?", (session['usuario_dni'],))
     citas_paciente = cursor.fetchall()
     conexion.close()
@@ -64,7 +89,7 @@ def dashboard():
 
 @app.route('/agendar', methods=['GET', 'POST'])
 def agendar_cita():
-    """Pantalla de Agendamiento - Filtros y Selección (agendar.html / buscar.html)"""
+    """Pantalla de Agendamiento - Filtros y Selección (agendar.html)"""
     if 'usuario_dni' not in session:
         return redirect(url_for('login'))
         
@@ -77,7 +102,6 @@ def agendar_cita():
         
         conexion = obtener_conexion_db()
         cursor = conexion.cursor()
-        # Se inserta la cita con el estado por defecto 'PENDIENTE'
         cursor.execute(
             "INSERT INTO citas (dni_paciente, especialidad, doctor, fecha, hora, estado) VALUES (?, ?, ?, ?, ?, 'PENDIENTE')",
             (dni_paciente, especialidad, doctor, fecha, hora)
@@ -86,7 +110,6 @@ def agendar_cita():
         conexion.commit()
         conexion.close()
         
-        # Redirigir directamente al flujo de pago pasando el ID de la cita recién creada
         return redirect(url_for('pantalla_pago', id_cita=id_nueva_cita))
         
     return render_template('agendar.html')
@@ -97,7 +120,7 @@ def agendar_cita():
 
 @app.route('/pago/<int:id_cita>')
 def pantalla_pago(id_cita):
-    """Muestra la interfaz para que el usuario seleccione el método de pago"""
+    """Muestra la interfaz para seleccionar el método de pago"""
     if 'usuario_dni' not in session:
         return redirect(url_for('login'))
         
@@ -110,31 +133,26 @@ def pantalla_pago(id_cita):
     if not cita:
         return "Error: Cita no encontrada", 404
         
-    return render_template('buscar.html', cita=cita, monto=50.0) # Reutiliza o renderiza la vista de pago
+    return render_template('buscar.html', cita=cita, monto=50.0)
 
 @app.route('/procesar_pago', methods=['POST'])
 def C_Pago():
-    """Controlador C_Pago: Procesa la transacción y actualiza las estructuras lógicas"""
+    """Controlador C_Pago: Procesa la transacción y actualiza los estados"""
     if 'usuario_dni' not in session:
         return redirect(url_for('login'))
         
     id_cita = request.form.get('id_cita')
-    metodo_pago = request.form.get('metodo_pago') # Tarjeta / Yape / Plin
-    monto_fijo = 50.0 # Costo base de la consulta médica general
+    metodo_pago = request.form.get('metodo_pago')
+    monto_fijo = 50.0
     
     if not id_cita or not metodo_pago:
         return "Error: Parámetros de transacción incompletos.", 400
         
-    # Importar funciones de persistencia del módulo de datos
     from database.db_config import registrar_pago_completo
     
     try:
-        # Registrar transacción completa y ejecutar SP_M_Cita_Estado interno
         registrar_pago_completo(int(id_cita), monto_fijo, metodo_pago)
-        
-        # Simulación de generación del comprobante PDF descargable según documentación
         nombre_comprobante = f"COMPROBANTE_ELECTRONICO_CITA_{id_cita}.pdf"
-        
         return render_template('exito.html', id_cita=id_cita, pdf=nombre_comprobante, metodo=metodo_pago)
         
     except Exception as e:
@@ -146,6 +164,5 @@ def logout():
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    # Inicialización en modo seguro para despliegue local o Render
     app.run(debug=True, port=int(os.environ.get("PORT", 5000)))
-
+    
