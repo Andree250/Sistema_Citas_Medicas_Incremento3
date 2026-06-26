@@ -14,13 +14,36 @@ def obtener_conexion_db():
     return sqlite3.connect(RUTA_DB)
 
 # ==========================================
-# RUTAS DE AUTENTICACIÓN Y REGISTRO (MÚLTIPLES ALIAS)
+# RUTAS DE AUTENTICACIÓN Y REGISTRO (CORREGIDO)
 # ==========================================
 
 @app.route('/')
 def index():
-    """Landing Page / Pantalla de Inicio (index.html)"""
-    return render_template('index.html')
+    """Hacemos que la raíz redirija directamente al Login para evitar el error 404"""
+    return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login.html', methods=['GET', 'POST'])
+def login():
+    """Pantalla de Inicio de Sesión / Acceso (login.html)"""
+    if request.method == 'POST':
+        dni = request.form.get('dni')
+        password = request.form.get('password')
+        
+        conexion = obtener_conexion_db()
+        cursor = conexion.cursor()
+        cursor.execute("SELECT dni, nombre, correo FROM usuarios WHERE dni = ? AND password = ?", (dni, password))
+        usuario = cursor.fetchone()
+        conexion.close()
+        
+        if usuario:
+            session['usuario_dni'] = usuario[0]
+            session['usuario_nombre'] = usuario[1]
+            return redirect(url_for('dashboard'))
+        else:
+            return render_template('login.html', error="Credenciales incorrectas. Intente de nuevo.")
+            
+    return render_template('login.html')
 
 @app.route('/crear_usuario', methods=['GET', 'POST'])
 @app.route('/crear_usuario.html', methods=['GET', 'POST'])
@@ -48,29 +71,6 @@ def crear_usuario():
             
     return render_template('login.html')
 
-@app.route('/login', methods=['GET', 'POST'])
-@app.route('/login.html', methods=['GET', 'POST'])
-def login():
-    """Pantalla de Inicio de Sesión / Acceso (login.html)"""
-    if request.method == 'POST':
-        dni = request.form.get('dni')
-        password = request.form.get('password')
-        
-        conexion = obtener_conexion_db()
-        cursor = conexion.cursor()
-        cursor.execute("SELECT dni, nombre, correo FROM usuarios WHERE dni = ? AND password = ?", (dni, password))
-        usuario = cursor.fetchone()
-        conexion.close()
-        
-        if usuario:
-            session['usuario_dni'] = usuario[0]
-            session['usuario_nombre'] = usuario[1]
-            return redirect(url_for('dashboard'))
-        else:
-            return render_template('login.html', error="Credenciales incorrectas. Intente de nuevo.")
-            
-    return render_template('login.html')
-
 @app.route('/dashboard')
 @app.route('/dashboard.html')
 def dashboard():
@@ -87,7 +87,7 @@ def dashboard():
     return render_template('dashboard.html', nombre=session['usuario_nombre'], citas=citas_paciente)
 
 # ==========================================
-# FLUJO 2: AGENDAMIENTO DE CITAS Médicas
+# FLUJO 2: AGENDAMIENTO DE CITAS MÉDICAS
 # ==========================================
 
 @app.route('/agendar', methods=['GET', 'POST'])
@@ -146,7 +146,7 @@ def C_Pago():
         return redirect(url_for('login'))
         
     id_cita = request.form.get('id_cita')
-    metodo_pago = request.form.get('metodo_pago') # Tarjeta / Yape / Plin
+    metodo_pago = request.form.get('metodo_pago')
     monto_fijo = 50.0
     
     if not id_cita or not metodo_pago:
@@ -169,4 +169,4 @@ def logout():
 
 if __name__ == '__main__':
     app.run(debug=True, port=int(os.environ.get("PORT", 5000)))
-    
+
