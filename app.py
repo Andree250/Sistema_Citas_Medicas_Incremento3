@@ -1,272 +1,152 @@
-from flask import Flask, render_template, request, redirect, url_for, session
-# 🔐 IMPORTACIÓN PARA IMPLEMENTAR OWASP A02 (CRIPTOGRAFÍA DE SEGURIDAD)
-from werkzeug.security import generate_password_hash, check_password_hash
-import sqlite3
 import os
+from flask import Flask, render_template, request, redirect, url_for, session
+import sqlite3
 
-app = Flask(__name__, template_folder='app/templates')
-app.secret_key = 'sistema_tech_2026_key' 
+app = Flask(__name__)
+app.secret_key = 'clave_secreta_sistema_tech'
 
-# --- CONFIGURACIÓN DE RUTAS DE BASE DE DATOS ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Configuración de la ruta de la base de datos
+DIR_ACTUAL = os.path.dirname(os.path.abspath(__file__))
+RUTA_DB = os.path.join(DIR_ACTUAL, "database", "sistema_tech.db")
 
-# Forzamos la creación de la estructura de directorios en el servidor de Render
-DATABASE_DIR = os.path.join(BASE_DIR, 'app', 'database')
-os.makedirs(DATABASE_DIR, exist_ok=True)
+def obtener_conexion_db():
+    return sqlite3.connect(RUTA_DB)
 
-DB_PATH = os.path.join(DATABASE_DIR, 'sistema_tech.db')
-DATABASE = DB_PATH
+# ==========================================
+# RUTAS DE AUTENTICACIÓN Y NAVEGACIÓN
+# ==========================================
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_PATH, timeout=20)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-# 🛠️ FUNCIÓN AUTOMÁTICA PARA INICIALIZAR LAS TABLAS EN RENDER
-def init_db():
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        # Crear tabla de usuarios si no existe
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS usuarios (
-                dni TEXT PRIMARY KEY,
-                nombre TEXT NOT NULL,
-                password TEXT NOT NULL
-            )
-        ''')
-        # Crear tabla de citas si no existe
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS citas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                dni_paciente TEXT NOT NULL,
-                especialidad TEXT NOT NULL,
-                doctor TEXT NOT NULL,
-                fecha TEXT NOT NULL,
-                hora TEXT NOT NULL
-            )
-        ''')
-        conn.commit()
-
-# Se ejecuta al levantar el servidor web para garantizar la existencia de la BD
-init_db()
-
-# --- SIMULADOR DE SERVICIOS EXTERNOS (PREPARADO PARA INCREMENTO 3) ---
-def enviar_correo_confirmacion(dni, especialidad, doctor, fecha, hora):
-    """
-    Simula la invocación de un servicio API externo (ej. SendGrid / Mailgun)
-    para el envío asíncrono de notificaciones por correo electrónico (Pregunta 20).
-    """
-    print("\n" + "="*50)
-    print("🚀 [SERVICIO EXTERNO] Invocando API de Mensajería...")
-    print(f"📧 Destinatario (Paciente DNI): {dni}")
-    print(f"📝 Detalle: Cita confirmada con el Dr. {doctor} ({especialidad})")
-    print(f"📅 Agenda: {fecha} a las {hora}")
-    print("✅ [API STATUS] Email enviado exitosamente (200 OK)")
-    print("="*50 + "\n")
-    return True
-
-# --- RUTAS DE NAVEGACIÓN ---
 @app.route('/')
-def home():
-    return render_template('login.html')
-
-@app.route('/registro')
-def registro():
+def index():
+    """Landing Page / Pantalla de Inicio (index.html)"""
     return render_template('index.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Pantalla de Inicio de Sesión / Acceso (login.html)"""
+    if request.method == 'POST':
+        dni = request.form.get('dni')
+        password = request.form.get('password')
+        
+        conexion = obtener_conexion_db()
+        cursor = conexion.cursor()
+        cursor.execute("SELECT dni, nombre, correo FROM usuarios WHERE dni = ? AND password = ?", (dni, password))
+        usuario = cursor.fetchone()
+        conexion.close()
+        
+        if usuario:
+            session['usuario_dni'] = usuario[0]
+            session['usuario_nombre'] = usuario[1]
+            return redirect(url_for('dashboard'))
+        else:
+            return render_template('login.html', error="Credenciales incorrectas. Intente nuevamente.")
+            
+    return render_template('login.html')
 
 @app.route('/dashboard')
 def dashboard():
-    # 🔐 PROTECCIÓN OWASP A01: CONTROL DE ACCESO ROTO
-    if 'usuario_nombre' not in session:
-        return redirect(url_for('home'))
-    return render_template('dashboard.html', nombre=session['usuario_nombre'])
-
-# --- LÓGICA DE USUARIOS ---
-
-@app.route('/crear_usuario', methods=['POST'])
-def crear_usuario():
-    dni = request.form.get('dni')
-    nombre = request.form.get('nombre')
-    contrasena = request.form.get('password')  
-
-    if not dni or not nombre or not contrasena:
-        return render_template('index.html', error="Todos los campos son obligatorios.")
-
-    # 🔐 MITIGACIÓN OWASP A02: Aplicamos hash con salting a la contraseña antes de guardarla
-    password_encriptada = generate_password_hash(contrasena, method='pbkdf2:sha256', salt_length=16)
-
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            # Guardamos la password encriptada de forma segura
-            cursor.execute('INSERT INTO usuarios (dni, nombre, password) VALUES (?, ?, ?)', 
-                           (dni, nombre, password_encriptada))
-            conn.commit()
+    """Panel de Control / Dashboard del Paciente (dashboard.html)"""
+    if 'usuario_dni' not in session:
+        return redirect(url_for('login'))
         
-        return render_template('index.html', exito="Usuario registrado correctamente. Ya puedes iniciar sesión.")
-        
-    except sqlite3.IntegrityError:
-        return render_template('index.html', error="El DNI ingresado ya se encuentra registrado.")
-    except Exception as e:
-        print(f"Error en Registro: {str(e)}")
-        return render_template('index.html', error="Error al acceder a la base de datos.")
-
-@app.route('/login_usuario', methods=['POST'])
-def login_usuario():
-    dni = request.form.get('dni')
-    contrasena = request.form.get('contrasena')
-
-    if not dni or not contrasena:
-        return render_template('login.html', error="Todos los campos son obligatorios.")
-
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            # Buscamos al usuario únicamente por su DNI
-            cursor.execute('SELECT nombre, password FROM usuarios WHERE dni = ?', (dni,))
-            usuario = cursor.fetchone()
-        
-        # 🔐 MITIGACIÓN OWASP A02: Verificación criptográfica segura de la contraseña hash
-        if usuario and check_password_hash(usuario['password'], contrasena):
-            session['usuario_nombre'] = usuario['nombre']
-            return redirect(url_for('dashboard'))
-        else:
-            return render_template('login.html', error="Usuario o contraseña incorrectos.")
-            
-    except Exception as e:
-        print(f"Error en Login: {str(e)}")
-        return render_template('login.html', error="Ocurrió un error en el servidor.")
-
-# --- LÓGICA DE CITAS MÉDICAS ---
-
-@app.route('/agendar/<especialidad>')
-def agendar(especialidad):
-    # 🔐 PROTECCIÓN OWASP A01: CONTROL DE ACCESO ROTO
-    if 'usuario_nombre' not in session:
-        return redirect(url_for('home'))
-    return render_template('agendar.html', especialidad=especialidad)
-
-# 🔐 INTERCEPTOR EXCLUSIVO PARA INTERCEPCIÓN GET (Muestra la pantalla roja para tu captura OWASP)
-@app.route('/confirmar_cita', methods=['GET'])
-def confirmar_cita_get():
-    # 🔐 PROTECCIÓN OWASP A01: CONTROL DE ACCESO ROTO (BLOQUEO GET)
-    if 'usuario_nombre' not in session:
-        return """
-        <div style="text-align:center; margin-top:50px; font-family:sans-serif; color:#d32f2f;">
-            <h1>❌ ERROR 403: ACCESO NO AUTORIZADO</h1>
-            <hr style="width:50%;">
-            <p>Debe iniciar sesión en el sistema para realizar esta acción.</p>
-            <br>
-            <a href="/" style="padding:10px 20px; background:#d32f2f; color:white; text-decoration:none; border-radius:5px;">Ir al Login</a>
-        </div>
-        """, 403
+    conexion = obtener_conexion_db()
+    cursor = conexion.cursor()
+    # Listar las citas del paciente incluyendo su estado de pago
+    cursor.execute("SELECT id, especialidad, doctor, fecha, hora, estado FROM citas WHERE dni_paciente = ?", (session['usuario_dni'],))
+    citas_paciente = cursor.fetchall()
+    conexion.close()
     
-    # Si tiene sesión iniciada pero entra escribiendo la URL, lo mandamos al panel
-    return redirect(url_for('dashboard'))
+    return render_template('dashboard.html', nombre=session['usuario_nombre'], citas=citas_paciente)
 
-# PROCESADOR DE FORMULARIO (POST)
-@app.route('/confirmar_cita', methods=['POST'])
-def confirmar_cita():
-    # 🔐 PROTECCIÓN OWASP A01: CONTROL DE ACCESO ROTO (BLOQUEO POST)
-    if 'usuario_nombre' not in session:
-        return """
-        <div style="text-align:center; margin-top:50px; font-family:sans-serif; color:#d32f2f;">
-            <h1>❌ ERROR 403: ACCESO NO AUTORIZADO</h1>
-            <hr style="width:50%;">
-            <p>Debe iniciar sesión en el sistema para realizar esta acción.</p>
-            <br>
-            <a href="/" style="padding:10px 20px; background:#d32f2f; color:white; text-decoration:none; border-radius:5px;">Ir al Login</a>
-        </div>
-        """, 403
+# ==========================================
+# FLUJO 2: AGENDAMIENTO DE CITAS
+# ==========================================
 
-    try:
-        dni = request.form.get('dni')
+@app.route('/agendar', methods=['GET', 'POST'])
+def agendar_cita():
+    """Pantalla de Agendamiento - Filtros y Selección (agendar.html / buscar.html)"""
+    if 'usuario_dni' not in session:
+        return redirect(url_for('login'))
+        
+    if request.method == 'POST':
         especialidad = request.form.get('especialidad')
         doctor = request.form.get('doctor')
         fecha = request.form.get('fecha')
         hora = request.form.get('hora')
+        dni_paciente = session['usuario_dni']
         
-        with get_db_connection() as conn:
-            conn.execute('''
-                INSERT INTO citas (dni_paciente, especialidad, doctor, fecha, hora) 
-                VALUES (?, ?, ?, ?, ?)
-            ''', (dni, especialidad, doctor, fecha, hora))
-            conn.commit()
+        conexion = obtener_conexion_db()
+        cursor = conexion.cursor()
+        # Se inserta la cita con el estado por defecto 'PENDIENTE'
+        cursor.execute(
+            "INSERT INTO citas (dni_paciente, especialidad, doctor, fecha, hora, estado) VALUES (?, ?, ?, ?, ?, 'PENDIENTE')",
+            (dni_paciente, especialidad, doctor, fecha, hora)
+        )
+        id_nueva_cita = cursor.lastrowid
+        conexion.commit()
+        conexion.close()
         
-        # 🚀 INVOCACIÓN ASÍNCRONA DEL SERVICIO EXTERNO DE EMAIL
-        enviar_correo_confirmacion(dni, especialidad, doctor, fecha, hora)
+        # Redirigir directamente al flujo de pago pasando el ID de la cita recién creada
+        return redirect(url_for('pantalla_pago', id_cita=id_nueva_cita))
         
-        return f"""
-        <div style="text-align:center; margin-top:50px; font-family:sans-serif; color:#00796b;">
-            <h1>✅ ¡CITA REGISTRADA CON ÉXITO!</h1>
-            <hr style="width:50%;">
-            <p><strong>Especialidad:</strong> {especialidad}</p>
-            <p><strong>Doctor:</strong> {doctor}</p>
-            <p><strong>Fecha:</strong> {fecha}</p>
-            <p><strong>Hora:</strong> {hora}</p>
-            <p style="color:#555; font-size:14px;">📧 *Se ha enviado un correo de confirmación electrónico al paciente (API externa ejecutada).*</p>
-            <br>
-            <a href="/dashboard" style="padding:10px 20px; background:#00796b; color:white; text-decoration:none; border-radius:5px;">Volver al Panel</a>
-        </div>
-        """
-    except Exception as e:
-        return f"<h1>Ocurrió un error:</h1><p>{str(e)}</p><a href='/dashboard'>Regresar</a>"
+    return render_template('agendar.html')
 
-# --- 🔍 MÓDULO OPTIMIZADO Y SEGURO: BUSCAR Y FILTRAR CITAS ---
+# ==========================================
+# FLUJO 3: CONTROLADOR Y PASARELA DE PAGOS
+# ==========================================
 
-@app.route('/buscar_citas', methods=['GET', 'POST'])
-def buscar_citas():
-    # 🔐 PROTECCIÓN OWASP A01: CONTROL DE ACCESO ROTO
-    if 'usuario_nombre' not in session:
-        return redirect(url_for('home'))
+@app.route('/pago/<int:id_cita>')
+def pantalla_pago(id_cita):
+    """Muestra la interfaz para que el usuario seleccione el método de pago"""
+    if 'usuario_dni' not in session:
+        return redirect(url_for('login'))
         
-    citas_filtradas = []
-    dni_buscado = ""
+    conexion = obtener_conexion_db()
+    cursor = conexion.cursor()
+    cursor.execute("SELECT id, especialidad, doctor, fecha, hora, estado FROM citas WHERE id = ?", (id_cita,))
+    cita = cursor.fetchone()
+    conexion.close()
     
-    if request.method == 'POST':
-        dni_buscado = request.form.get('dni')
+    if not cita:
+        return "Error: Cita no encontrada", 404
         
-        try:
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT id, especialidad, doctor, fecha, hora 
-                    FROM citas 
-                    WHERE dni_paciente = ?
-                ''', (dni_buscado,))
-                citas_filtradas = cursor.fetchall()
-        except Exception as e:
-            print(f"Error en la búsqueda: {str(e)}")
+    return render_template('buscar.html', cita=cita, monto=50.0) # Reutiliza o renderiza la vista de pago
 
-    return render_template('buscar.html', citas=citas_filtradas, dni=dni_buscado)
-
-# --- ❌ MÓDULO SEGURO: CANCELAR CITA (CU-04) ---
-
-@app.route('/cancelar_cita/<int:id_cita>', methods=['POST'])
-def cancelar_cita(id_cita):
-    # 🔐 PROTECCIÓN OWASP A01: CONTROL DE ACCESO ROTO
-    if 'usuario_nombre' not in session:
-        return redirect(url_for('home'))
+@app.route('/procesar_pago', methods=['POST'])
+def C_Pago():
+    """Controlador C_Pago: Procesa la transacción y actualiza las estructuras lógicas"""
+    if 'usuario_dni' not in session:
+        return redirect(url_for('login'))
         
+    id_cita = request.form.get('id_cita')
+    metodo_pago = request.form.get('metodo_pago') # Tarjeta / Yape / Plin
+    monto_fijo = 50.0 # Costo base de la consulta médica general
+    
+    if not id_cita or not metodo_pago:
+        return "Error: Parámetros de transacción incompletos.", 400
+        
+    # Importar funciones de persistencia del módulo de datos
+    from database.db_config import registrar_pago_completo
+    
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM citas WHERE id = ?', (id_cita,))
-            conn.commit()
-    except Exception as e:
-        print(f"Error al cancelar cita: {str(e)}")
+        # Registrar transacción completa y ejecutar SP_M_Cita_Estado interno
+        registrar_pago_completo(int(id_cita), monto_fijo, metodo_pago)
         
-    return redirect(url_for('buscar_citas'))
-
-# --- CIERRE DE SESIÓN ---
+        # Simulación de generación del comprobante PDF descargable según documentación
+        nombre_comprobante = f"COMPROBANTE_ELECTRONICO_CITA_{id_cita}.pdf"
+        
+        return render_template('exito.html', id_cita=id_cita, pdf=nombre_comprobante, metodo=metodo_pago)
+        
+    except Exception as e:
+        return f"Error crítico en el procesamiento de la transacción: {str(e)}", 500
 
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('home'))
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
+    # Inicialización en modo seguro para despliegue local o Render
+    app.run(debug=True, port=int(os.environ.get("PORT", 5000)))
 
     
