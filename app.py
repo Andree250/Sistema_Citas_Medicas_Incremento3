@@ -75,17 +75,14 @@ def crear_usuario():
                 conexion = obtener_conexion_db()
                 cursor = conexion.cursor()
                 
-                # 🎯 VALIDACIÓN CLAVE: Verificamos si el DNI ya existe en la base de datos
                 cursor.execute("SELECT dni FROM usuarios WHERE dni = ?", (dni,))
                 existe_usuario = cursor.fetchone()
                 
                 if existe_usuario:
                     conexion.close()
-                    print(f"⚠️ [VALIDACIÓN] Intento de registro fallido: El DNI {dni} ya existe.", file=sys.stderr)
-                    # Devolvemos la alerta directamente a tu index.html sin romper nada
+                    print(f"⚠️ [VALIDACIÓN] El DNI {dni} ya existe.", file=sys.stderr)
                     return render_template('index.html', error="El DNI ingresado ya se encuentra registrado en el sistema.")
                 
-                # Si no existe, procedemos con la inserción normal
                 session['temp_nombre'] = str(nombre).strip()
                 cursor.execute(
                     "INSERT INTO usuarios (dni, nombre, correo, password) VALUES (?, ?, ?, ?)",
@@ -95,7 +92,6 @@ def crear_usuario():
                 conexion.close()
                 print(f"💾 [BD] Usuario {nombre} guardado en tabla 'usuarios'.", file=sys.stderr)
                 
-                # Retorna al login enviando un mensaje de éxito dinámico
                 return render_template('login.html', exito="Usuario registrado correctamente. Ya puedes iniciar sesión.")
                 
             except Exception as e:
@@ -181,12 +177,16 @@ def C_Pago():
         cursor = conexion.cursor()
         cursor.execute("UPDATE citas SET estado = 'PAGADO' WHERE id = ?", (id_cita,))
         conexion.commit()
-        cursor.close()
+        conexion.close()
         
-        from database.db_config import registrar_pago_completo
-        registrar_pago_completo(int(id_cita), 50.0, metodo_pago)
-    except:
-        pass
+        # 🎯 PARCHE DE PRODUCCIÓN PARA RENDER: Protegemos la importación externa para evitar caídas
+        try:
+            from database.db_config import registrar_pago_completo
+            registrar_pago_completo(int(id_cita), 50.0, metodo_pago)
+        except Exception as err_import:
+            print(f"⚠️ [AVISO RENDER] No se ejecutó db_config externo, pero la cita se pagó con éxito: {str(err_import)}", file=sys.stderr)
+    except Exception as e:
+        print(f"🚨 [ERROR PROCESAR PAGO]: {str(e)}", file=sys.stderr)
 
     session['pago_metodo'] = metodo_pago
     session['pago_pdf'] = f"COMPROBANTE_ELECTRONICO_CITA_{id_cita}.pdf"
@@ -261,7 +261,5 @@ def logout():
     return redirect(url_for('login'))
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
-
+    app.run(debug=True, host='0.0.0.0', port=8080)
     
